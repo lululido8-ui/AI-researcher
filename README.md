@@ -173,9 +173,10 @@ graph TD
 | w/o Context Compression (无上下文压缩) | 82.1 (-10.4) | 190s | ~120k |
 | w/o Academic Retrievers (仅使用通用网页) | 78.5 (-14.0) | 130s | ~40k |
 | w/o State Cache (无草稿状态记忆) | 88.2 (-4.3) | 140s | ~45k |
+
 实验结论：
-1. 去除上下文压缩 (Context Compression) 后，大量的无效网页噪声导致 LLM 陷入“注意力丢失”，F1 分数大幅下降 10.4，且 Token 成本剧增近 3 倍。
-2. 去除多智能体协作 (Multi-Agent) 会使长篇深度研究的逻辑连贯性受损，虽然速度变快，但质量下降明显。
+- 去除上下文压缩 (Context Compression) 后，大量的无效网页噪声导致 LLM 陷入“注意力丢失”，F1 分数大幅下降 10.4，且 Token 成本剧增近 3 倍。
+- 去除多智能体协作 (Multi-Agent) 会使长篇深度研究的逻辑连贯性受损，虽然速度变快，但质量下降明显。
 
 ---
 3. 基座模型对比 (LLM Backbone Comparison)
@@ -188,6 +189,7 @@ graph TD
 | Qwen-Max (推荐) | 94.2 | 4.8 | $ 0.15 |
 | Qwen-Plus | 89.5 | 4.5 | $ 0.05 |
 | Qwen2.5-72B-Instruct (本地) | 91.8 | 4.6 | N/A (Local) |
+
 分析：在 AI-Researcher 强大的检索与纠错框架加持下，Qwen-Max 展现出了与 GPT-4o 几乎持平的顶尖研究能力（得分差异 < 1%），但 API 调用成本仅为其三分之一。即使是运行在本地或平价方案的 Qwen-Plus / 72B 模型，也能碾压传统的 RAG 方案。
 
 ## 快速开始
