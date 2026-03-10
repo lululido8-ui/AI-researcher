@@ -16,6 +16,7 @@ from .tools import (
     FullTextFetcher,
     LongPaperSummarizer,
     PaperDedupRanker,
+    PaperExistenceValidator,
     PaperParser,
 )
 
@@ -34,6 +35,7 @@ class AcademicResearchPipeline:
         self.fetcher = FullTextFetcher(cache=self.cache)
         self.parser = PaperParser()
         self.summarizer = LongPaperSummarizer(researcher)
+        self.validator = PaperExistenceValidator()
         self.citation_analyzer = CitationGraphAnalyzer()
         self.crossref_cls = get_retriever("crossref")
         self.unpaywall_cls = get_retriever("unpaywall")
@@ -74,6 +76,27 @@ class AcademicResearchPipeline:
         records = self._filter_records(records)
         records = self.ranker.rank(records, query=query, max_papers=self.config["max_papers"])
         records = self.citation_analyzer.analyze(records)
+
+        pre_validation_count = len(records)
+        records = await self.validator.validate_batch(records)
+        discarded = pre_validation_count - len(records)
+        if discarded > 0:
+            logger.info(
+                "Paper existence validation: %d/%d papers verified, %d discarded",
+                len(records), pre_validation_count, discarded,
+            )
+            if self.researcher.verbose:
+                from ..actions.utils import stream_output
+                await stream_output(
+                    "logs",
+                    "academic_validation",
+                    f"📋 Paper validation: {len(records)}/{pre_validation_count} papers verified "
+                    f"({discarded} unverifiable papers discarded)",
+                    self.researcher.websocket,
+                )
+
+        if not records:
+            return AcademicPipelineResult(context="", papers=[], summaries=[])
 
         summaries = []
         if self.config["summarize_long_paper"]:

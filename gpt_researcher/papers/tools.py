@@ -280,6 +280,90 @@ class LongPaperSummarizer:
         )
 
 
+class PaperExistenceValidator:
+    """Validate that paper records point to real, existing publications.
+
+    Uses DOI resolution via Crossref and URL reachability checks to filter out
+    hallucinated or dead-link papers before they enter downstream summarization.
+    """
+
+    CROSSREF_WORKS_URL = "https://api.crossref.org/works/"
+    REQUEST_HEADERS = {
+        "User-Agent": "GPT-Researcher/1.0 (academic-paper-validator)",
+    }
+
+    def __init__(self, timeout: int = 15):
+        self.timeout = timeout
+
+    async def validate_batch(self, records: list[PaperRecord]) -> list[PaperRecord]:
+        """Validate all records concurrently, returning only verified papers."""
+        tasks = [self._validate_one(r) for r in records]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        verified: list[PaperRecord] = []
+        for record, result in zip(records, results):
+            if isinstance(result, Exception):
+                continue
+            if result:
+                verified.append(record)
+        return verified
+
+    async def _validate_one(self, record: PaperRecord) -> bool:
+        """Return True if the paper can be confirmed to exist."""
+        if record.doi:
+            if await self._verify_doi(record.doi):
+                return True
+
+        url = record.oa_pdf_url or record.url
+        if url:
+            if await self._verify_url(url):
+                return True
+
+        return False
+
+    async def _verify_doi(self, doi: str) -> bool:
+        """Check DOI existence via Crossref API (HTTP 200 = exists)."""
+        def _request():
+            resp = requests.get(
+                f"{self.CROSSREF_WORKS_URL}{doi}",
+                timeout=self.timeout,
+                headers=self.REQUEST_HEADERS,
+            )
+            return resp.status_code == 200
+
+        try:
+            return await asyncio.to_thread(_request)
+        except Exception:
+            return False
+
+    async def _verify_url(self, url: str) -> bool:
+        """Check URL reachability via HEAD with GET fallback."""
+        def _request():
+            try:
+                resp = requests.head(
+                    url, timeout=self.timeout, allow_redirects=True,
+                    headers=self.REQUEST_HEADERS,
+                )
+                if resp.status_code < 400:
+                    return True
+            except requests.RequestException:
+                pass
+            try:
+                resp = requests.get(
+                    url, timeout=self.timeout, allow_redirects=True,
+                    headers=self.REQUEST_HEADERS, stream=True,
+                )
+                ok = resp.status_code < 400
+                resp.close()
+                return ok
+            except requests.RequestException:
+                return False
+
+        try:
+            return await asyncio.to_thread(_request)
+        except Exception:
+            return False
+
+
 class CitationGraphAnalyzer:
     """Placeholder for future citation-network analysis."""
 
